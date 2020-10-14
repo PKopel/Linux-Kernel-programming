@@ -6,7 +6,7 @@ clean:
 	rm -f *.so
 
 build:clean
-	$(CC) -c main.c -o main.o
+	$(CC) main.c -o main.o
 
 run:build
 	./main.o
