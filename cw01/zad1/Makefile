@@ -6,7 +6,7 @@ clean:
 	rm -f *.so
 
 build:clean
-	$(CC) main.c -o main.o
+	$(CC) main.c ../common.c -o main.o -lpthread
 
 run:build
 	./main.o
