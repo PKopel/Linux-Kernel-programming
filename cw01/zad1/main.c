@@ -11,8 +11,8 @@ const char *FILE_NAME = "file.txt";
 sem_t *writer_sem, *reader_sem;
 int readers_count = 0;
 
-// Writer thread function
-int Writer(void *data)
+// writer thread function
+int writer(void *data)
 {
 
     FILE *file = fopen(FILE_NAME, "w");
@@ -25,7 +25,7 @@ int Writer(void *data)
         {
 
             // Write
-            printf("(W) Writer started writing...");
+            printf("(W) writer started writing...");
             fflush(stdout);
             fprintf(file, "%02d\t", i);
             fflush(file);
@@ -45,8 +45,8 @@ int Writer(void *data)
     return 0;
 }
 
-// Reader thread function
-int Reader(void *data)
+// reader thread function
+int reader(void *data)
 {
     int i;
     int threadId = *(int *)data;
@@ -69,12 +69,12 @@ int Reader(void *data)
                 error("Error occured during unlocking the reader semaphore.\n");
 
             // Read
-            printf("(R) Reader %d started reading...", threadId);
+            printf("(R) reader %d started reading...", threadId);
             fflush(stdout);
             fread(read_buffer, sizeof(char), 10, file);
-            printf("(R) Reader %d read \"%s\"", threadId, read_buffer);
+            printf("(R) reader %d read \"%s\"", threadId, read_buffer);
             usleep(get_random_time(200));
-            printf("(R) Reader %d finished\n", threadId);
+            printf("(R) reader %d finished\n", threadId);
 
             if (sem_wait(reader_sem) != 0)
                 error("Error occured during locking the reader semaphore.\n");
@@ -114,11 +114,11 @@ int main(int argc, char *argv[])
     if ((reader_sem = sem_open(READER_SEM, O_CREAT | O_EXCL, 0666, 1)) == SEM_FAILED)
         error("create writer sem");
 
-    // Create the Writer thread
+    // Create the writer thread
     rc = pthread_create(
         &writerThread,  // thread identifier
         NULL,           // thread attributes
-        (void *)Writer, // thread function
+        (void *)writer, // thread function
         (void *)NULL);  // thread function argument
 
     if (rc != 0)
@@ -127,17 +127,17 @@ int main(int argc, char *argv[])
         exit(-1);
     }
 
-    // Create the Reader threads
+    // Create the reader threads
     for (i = 0; i < READERS_COUNT; i++)
     {
-        // Reader initialization - takes random amount of time
+        // reader initialization - takes random amount of time
         usleep(get_random_time(1000));
         int *threadId = malloc(sizeof(int));
         *threadId = i;
         rc = pthread_create(
             &readerThreads[i], // thread identifier
             NULL,              // thread attributes
-            (void *)Reader,    // thread function
+            (void *)reader,    // thread function
             (void *)threadId); // thread function argument
 
         if (rc != 0)
@@ -149,11 +149,11 @@ int main(int argc, char *argv[])
 
     // At this point, the readers and writers should perform their operations
 
-    // Wait for the Readers
+    // Wait for the readers
     for (i = 0; i < READERS_COUNT; i++)
         pthread_join(readerThreads[i], NULL);
 
-    // Wait for the Writer
+    // Wait for the writer
     pthread_join(writerThread, NULL);
 
     if (sem_unlink(WRITER_SEM) < 0)
