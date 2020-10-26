@@ -9,38 +9,60 @@ const int FILES_NUMBER = 3;
 
 const char *READER_SEM = "reader_sem";
 const char *WRITER_SEM = "writer_sem";
-const char *FILE_NAME = "file";
+const char *FILE_NAMES[] = {"file1", "file2", "file3"};
 
-pthread_mutex_t *write_mutexes;
-pthread_mutex_t *read_mutexes;
+sem_t *write_sems;
+sem_t *read_sems;
+int *readers_counts;
 
 // writer thread function
 int writer(void *data)
 {
+    int threadId = *(int *)data;
 
-    FILE *file = fopen(FILE_NAME, "w");
+    int i, index;
 
-    for (int i = 0; i < WRITER_TURNS; i++)
+    FILE **files =
+        (FILE **)calloc(FILES_NUMBER, sizeof(FILE *));
+
+    for (i = 0; i < FILES_NUMBER; i++)
+        files[i] = fopen(FILE_NAMES[i], "a");
+
+    for (i = 0; i < WRITER_TURNS; i++)
     {
-        if (sem_wait(writer_sem) != 0)
-            error("Error occured during locking the writer semaphore.\n");
+    try_file:
+        index = get_random_index(FILES_NUMBER);
+
+        if (sem_trywait(&write_sems[index]) != 0)
+        {
+            if (errno == EAGAIN)
+            {
+                usleep(get_random_time(10));
+                goto try_file;
+            }
+            else
+                error("(W) Error occured during locking the writer semaphore.\n");
+        }
 
         // write
-        printf("(W) writer started writing...");
+        printf("(W) writer %d started writing to file %d...", threadId, index);
         fflush(stdout);
-        fprintf(file, "%02d\t", i);
-        fflush(file);
+        fseek(files[index], 0, SEEK_END);
+        fprintf(files[index], "W %03d %03d\n", threadId, i);
+        fflush(files[index]);
         usleep(get_random_time(800));
-        printf("(W) finished\n");
+        printf("(W) writer %d finished\n", threadId);
 
         // Release ownership of the semapthore object.
-        if (sem_post(writer_sem) != 0)
-            error("Error occured during unlocking the writer semaphore.\n");
+        if (sem_post(&write_sems[index]) != 0)
+            error("(W) Error occured during unlocking the writer semaphore.\n");
         // _think, think, think, think
         usleep(get_random_time(1000));
     }
 
-    fclose(file);
+    free((void *)data);
+    for (i = 0; i < FILES_NUMBER; i++)
+        fclose(files[i]);
 
     return 0;
 }
@@ -48,47 +70,64 @@ int writer(void *data)
 // reader thread function
 int reader(void *data)
 {
-    int threadId = *(int *)data;
+    int i, index, threadId = *(int *)data;
 
-    FILE *file = fopen(FILE_NAME, "r");
+    FILE **files =
+        (FILE **)calloc(FILES_NUMBER, sizeof(FILE *));
+
+    for (i = 0; i < FILES_NUMBER; i++)
+        files[i] = fopen(FILE_NAMES[i], "r");
+
     char *read_buffer =
         (char *)calloc(10, sizeof(char));
 
-    for (int i = 0; i < READER_TURNS; i++)
+    for (i = 0; i < READER_TURNS; i++)
     {
-        if (sem_wait(reader_sem) != 0)
-            error("Error occured during locking the reader semaphore.\n");
-        readers_count++;
-        if (readers_count == 1)
-            if (sem_wait(writer_sem) != 0)
-                error("Error occured during locking the writer semaphore.\n");
-        if (sem_post(reader_sem) != 0)
-            error("Error occured during unlocking the reader semaphore.\n");
+    try_again:
+        index = get_random_index(FILES_NUMBER);
+
+        if (sem_trywait(&read_sems[index]) != 0)
+        {
+            if (errno == EAGAIN)
+            {
+                usleep(get_random_time(10));
+                goto try_again;
+            }
+            else
+                error("(R) Error occured during locking the reader semaphore (I).\n");
+        }
+        readers_counts[index]++;
+        if (readers_counts[index] == 1)
+            if (sem_wait(&write_sems[index]) != 0)
+                error("(R) Error occured during locking the writer semaphore.\n");
+        if (sem_post(&read_sems[index]) != 0)
+            error("(R) Error occured during unlocking the reader semaphore (I).\n");
 
         // Read
-        printf("(R) reader %d started reading...", threadId);
+        printf("(R) reader %d started reading from file %d...", threadId, index);
         fflush(stdout);
-        fread(read_buffer, sizeof(char), 10, file);
+        fread(read_buffer, sizeof(char), 10, files[index]);
         printf("(R) reader %d read \"%s\"", threadId, read_buffer);
         usleep(get_random_time(200));
         printf("(R) reader %d finished\n", threadId);
 
-        if (sem_wait(reader_sem) != 0)
-            error("Error occured during locking the reader semaphore.\n");
+        if (sem_wait(&read_sems[index]) != 0)
+            error("(R) Error occured during locking the reader semaphore (D).\n");
 
-        readers_count--;
-        if (readers_count == 0)
-            if (sem_post(writer_sem) != 0)
-                error("Error occured during unlocking the writer semaphore.\n");
-        if (sem_post(reader_sem) != 0)
-            error("Error occured during unlocking the reader semaphore.\n");
+        readers_counts[index]--;
+        if (readers_counts[index] == 0)
+            if (sem_post(&write_sems[index]) != 0)
+                error("(R) Error occured during unlocking the writer semaphore.\n");
+        if (sem_post(&read_sems[index]) != 0)
+            error("(R) Error occured during unlocking the reader semaphore (D).\n");
 
         usleep(get_random_time(800));
     }
 
     free((void *)data);
     free((void *)read_buffer);
-    fclose(file);
+    for (i = 0; i < FILES_NUMBER; i++)
+        fclose(files[i]);
 
     return 0;
 }
@@ -97,30 +136,26 @@ int main(int argc, char *argv[])
 {
     srand(100005);
 
-    buffer =
-        (char *)calloc(BUFFER_SIZE, sizeof(char));
+    write_sems =
+        (sem_t *)calloc(FILES_NUMBER, sizeof(sem_t));
 
-    pthread_t writer_thread;
-    pthread_t buffer_writer_threads[WRITERS_COUNT];
+    read_sems =
+        (sem_t *)calloc(FILES_NUMBER, sizeof(sem_t));
+
+    readers_counts =
+        (int *)calloc(FILES_NUMBER, sizeof(int));
+
+    pthread_t writer_threads[WRITERS_COUNT];
     pthread_t reader_threads[READERS_COUNT];
 
     int i, rc;
 
-    if ((writer_sem = sem_open(WRITER_SEM, O_CREAT | O_EXCL, 0666, 1)) == SEM_FAILED)
-        error("create writer sem");
-
-    if ((reader_sem = sem_open(READER_SEM, O_CREAT | O_EXCL, 0666, 1)) == SEM_FAILED)
-        error("create writer sem");
-
-    // Create the writer thread
-    rc = pthread_create(
-        &writer_thread, // thread identifier
-        NULL,           // thread attributes
-        (void *)writer, // thread function
-        (void *)NULL);  // thread function argument
-
-    if (rc != 0)
-        error("Couldn't create the buffer writer threads");
+    for (i = 0; i < FILES_NUMBER; i++)
+    {
+        sem_init(&write_sems[i], 0, 1);
+        sem_init(&read_sems[i], 0, 1);
+        readers_counts[i] = 0;
+    }
 
     for (i = 0; i < WRITERS_COUNT; i++)
     {
@@ -129,10 +164,10 @@ int main(int argc, char *argv[])
         int *threadId = malloc(sizeof(int));
         *threadId = i;
         rc = pthread_create(
-            &buffer_writer_threads[i], // thread identifier
-            NULL,                      // thread attributes
-            (void *)buffer_writer,     // thread function
-            (void *)threadId);         // thread function argument
+            &writer_threads[i], // thread identifier
+            NULL,               // thread attributes
+            (void *)writer,     // thread function
+            (void *)threadId);  // thread function argument
 
         if (rc != 0)
             error("Couldn't create the buffer writer threads");
@@ -161,16 +196,13 @@ int main(int argc, char *argv[])
     for (i = 0; i < READERS_COUNT; i++)
         pthread_join(reader_threads[i], NULL);
 
-    // Wait for the writer
-    pthread_join(writer_thread, NULL);
+    // Wait for the writers
+    for (i = 0; i < READERS_COUNT; i++)
+        pthread_join(writer_threads[i], NULL);
 
-    if (sem_unlink(WRITER_SEM) < 0)
-        error("writer sem unlink");
-
-    if (sem_unlink(READER_SEM) < 0)
-        error("reader sem unlink");
-
-    free((void *)buffer);
+    free((void *)write_sems);
+    free((void *)read_sems);
+    free((void *)readers_counts);
 
     return (0);
 }

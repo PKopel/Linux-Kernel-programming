@@ -12,4 +12,6 @@
 
 void error(char *msg);
 
+int get_random_index(int bound);
+
 int get_random_time(int base);

@@ -35,10 +35,13 @@ int buffer_writer(void *data)
         while (BUFFER_SIZE <= buffer_index)
             pthread_cond_wait(&buffer_empty, &buffer_mutex);
 
+        printf("(W) writer %d started writing...", threadId);
+
         strcpy(&buffer[buffer_index], message);
 
         buffer_index += 10;
         usleep(get_random_time(400));
+        printf("(W) writer %d finished\n", threadId);
 
         if (pthread_mutex_unlock(&buffer_mutex) != 0)
             error("Error occured during unlocking the buffer mutex.\n");
@@ -206,6 +209,10 @@ int main(int argc, char *argv[])
     // Wait for the readers
     for (i = 0; i < READERS_COUNT; i++)
         pthread_join(reader_threads[i], NULL);
+
+    // Wait for the writers
+    for (i = 0; i < READERS_COUNT; i++)
+        pthread_join(buffer_writer_threads[i], NULL);
 
     // Wait for the writer
     pthread_join(writer_thread, NULL);
