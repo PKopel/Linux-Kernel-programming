@@ -7,8 +7,6 @@ const int WRITERS_COUNT = 5;
 
 const int FILES_NUMBER = 3;
 
-const char *READER_SEM = "reader_sem";
-const char *WRITER_SEM = "writer_sem";
 const char *FILE_NAMES[] = {"file1", "file2", "file3"};
 
 sem_t *write_sems;
@@ -152,6 +150,7 @@ int main(int argc, char *argv[])
 
     for (i = 0; i < FILES_NUMBER; i++)
     {
+        unlink(FILE_NAMES[i]);
         sem_init(&write_sems[i], 0, 1);
         sem_init(&read_sems[i], 0, 1);
         readers_counts[i] = 0;
