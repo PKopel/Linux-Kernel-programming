@@ -1,0 +1,9 @@
+*.txt
+*.o
+*.a
+*.so
+KopelPawel/*
+KopelPawel*
+kol*
+.vscode
+*.tar.gz
