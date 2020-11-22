@@ -2,5 +2,10 @@
     "C_Cpp.errorSquiggles": "Enabled",
     "C_Cpp.loggingLevel": "Debug",
     "zenMode.silentNotifications": false,
-    "telemetry.enableTelemetry": false
+    "telemetry.enableTelemetry": false,
+    "files.watcherExclude": {
+        "**/.git/**": true,
+        "**/cw02/**": true
+    },
+    "C_Cpp.clang_format_fallbackStyle": "{BasedOnStyle: WebKit, IndentWidth: 8, ColumnLimit: 80}",
 }
