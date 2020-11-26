@@ -1,4 +1,4 @@
-obj-m := circular_module.o
+obj-m := circular.o
 
 KDIR  := ../../../cw02/uml/linux-5.9.6
 PWD   := $(shell pwd)
