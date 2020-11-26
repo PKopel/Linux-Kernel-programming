@@ -7,15 +7,13 @@
 
 MODULE_LICENSE("GPL");
 
-#define CIRCULAR_MAJOR 199
+#define CIRCULAR_MAJOR 299
 
 size_t buf_size = 40;
 
-const char* const text = "CIRCULAR. Read calls: %zu, Write calls: %zu\n";
-
 size_t circular_buf_index;
 char* circular_buf;
-bool copied;
+bool circular_buf_filled = false;
 
 struct miscdevice circular_dev;
 
@@ -25,7 +23,7 @@ struct proc_dir_entry* proc_entry;
 const struct file_operations circular_fops;
 
 /* Operations for /proc/circular */
-const struct file_operations proc_fops;
+const struct proc_ops proc_fops;
 
 static int __init circular_init(void)
 {
@@ -52,6 +50,7 @@ static int __init circular_init(void)
                 goto err;
         } else {
                 circular_buf[0] = '\0';
+                circular_buf_index = 0;
                 result = 0;
                 printk(KERN_INFO "The CIRCULAR module has been inserted.\n");
         }
@@ -81,52 +80,51 @@ static void __exit circular_exit(void)
 ssize_t circular_read(
     struct file* filp, char __user* user_buf, size_t count, loff_t* f_pos)
 {
-        size_t to_copy = min(count, buf_size - *f_pos);
+        size_t to_copy = strlen(circular_buf);
 
-        if (copy_to_user(user_buf, circular_buf + *f_pos, to_copy)) {
+        if (*f_pos >= to_copy) {
+                return 0;
+        }
+
+        if (copy_to_user(user_buf, circular_buf, to_copy)) {
                 printk(KERN_WARNING "CIRCULAR: could not copy data to user\n");
                 return -EFAULT;
         }
 
-        if (to_copy < count) {
-                if (copy_to_user(
-                        user_buf + to_copy, circular_buf, count - to_copy)) {
-                        printk(KERN_WARNING
-                            "CIRCULAR: could not copy data to user\n");
-                        return -EFAULT;
-                }
-        }
-
-        *f_pos += count % buf_size;
+        *f_pos += to_copy;
         return to_copy;
 }
 
 ssize_t circular_write(
     struct file* filp, const char __user* user_buf, size_t count, loff_t* f_pos)
 {
-        size_t head, tail;
-        if (*f_pos + count > buf_size) {
-                tail = *f_pos + count - buf_size;
-                head = count - tail;
-                if (copy_from_user(circular_buf + *f_pos, user_buf, head)) {
-                        printk(KERN_WARNING "CIRCULAR: could not copy data "
-                                            "from user\n");
-                        return -EFAULT;
-                }
-                if (copy_from_user(circular_buf, user_buf + head, tail)) {
-                        printk(KERN_WARNING "CIRCULAR: could not copy data "
-                                            "from user\n");
-                        return -EFAULT;
-                }
+        size_t head, tail, next_buf_index;
+
+        next_buf_index = circular_buf_index + count;
+        if (next_buf_index > buf_size) {
+                tail = next_buf_index - buf_size;
+                circular_buf_filled = true;
         } else {
-                if (copy_from_user(circular_buf + *f_pos, user_buf, count)) {
-                        printk(KERN_WARNING "CIRCULAR: could not copy data "
-                                            "from user\n");
-                        return -EFAULT;
-                }
+                tail = 0;
+        }
+        head = tail > 0 ? count - tail : count;
+
+        if (copy_from_user(circular_buf + circular_buf_index, user_buf, head)) {
+                printk(KERN_WARNING "CIRCULAR: could not copy data "
+                                    "head from user, cbi = %ld\n",
+                    circular_buf_index);
+                return -EFAULT;
+        }
+        if (copy_from_user(circular_buf, user_buf + head, tail)) {
+                printk(KERN_WARNING "CIRCULAR: could not copy data "
+                                    "tail from user, cbi = %ld\n",
+                    circular_buf_index);
+                return -EFAULT;
         }
 
-        *f_pos += count % buf_size;
+        circular_buf_index = next_buf_index % buf_size;
+        if (!circular_buf_filled)
+                circular_buf[circular_buf_index] = '\0';
         return count;
 }
 
@@ -161,6 +159,14 @@ ssize_t circular_write_proc(
         kvfree(circular_buf);
 
         circular_buf = new_buf;
+        if (buf_size < new_size)
+                circular_buf_filled = false;
+
+        if (circular_buf_index > new_size) {
+                circular_buf_index = new_size;
+                circular_buf_filled = true;
+        }
+
         buf_size = new_size;
 
         return count;
@@ -179,9 +185,8 @@ const struct file_operations circular_fops = {
         .write = circular_write,
 };
 
-const struct file_operations proc_fops = {
-        .owner = THIS_MODULE,
-        .write = circular_write_proc,
+const struct proc_ops proc_fops = {
+        .proc_write = circular_write_proc,
 };
 
 module_init(circular_init);

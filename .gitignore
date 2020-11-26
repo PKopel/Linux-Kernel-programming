@@ -2,6 +2,10 @@
 *.o
 *.a
 *.so
+*.ko
+*.cmd
+*.symvers
+*.order
 KopelPawel/*
 KopelPawel*
 kol*

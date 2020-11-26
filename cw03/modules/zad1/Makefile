@@ -1,10 +1,10 @@
 obj-m := circular_module.o
 
-KDIR  := /lib/modules/$(shell uname -r)/build
+KDIR  := ../../../cw02/uml/linux-5.9.6
 PWD   := $(shell pwd)
 
 default:
-	make -C $(KDIR) M=$(PWD) modules
+	$(MAKE) -C $(KDIR) M=$(PWD) ARCH=um modules
 
 clean:
-	make  -C $(KDIR) M=$(PWD) clean
+	$(MAKE)  -C $(KDIR) M=$(PWD) clean
