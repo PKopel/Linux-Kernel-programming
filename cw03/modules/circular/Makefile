@@ -1,4 +1,4 @@
-obj-m := backdoor.o
+obj-m := circular.o
 
 umKDIR  := ../../../cw02/uml/linux-5.9.6
 KDIR  := /lib/modules/$(shell uname -r)/build

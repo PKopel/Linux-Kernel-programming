@@ -7,7 +7,7 @@ PWD   := $(shell pwd)
 default:
 	$(MAKE) -C $(KDIR) M=$(PWD) modules
 
-uml:
+um:
 	$(MAKE) -C $(umKDIR) M=$(PWD) ARCH=um modules
 
 clean:
