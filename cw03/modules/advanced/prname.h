@@ -4,8 +4,7 @@
 #include <linux/fs.h>
 #include <linux/miscdevice.h>
 #include <linux/mm.h>
-#include <linux/module.h>
-#include <linux/proc_fs.h>
+#include <linux/pid.h>
 #include <linux/uaccess.h>
 
 int prname_init(void);

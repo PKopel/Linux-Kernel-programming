@@ -8,4 +8,10 @@
         "**/cw02/**": true
     },
     "C_Cpp.clang_format_fallbackStyle": "{BasedOnStyle: WebKit, IndentWidth: 8, ColumnLimit: 80}",
+    "files.associations": {
+        "random": "c",
+        "istream": "c",
+        "ostream": "c",
+        "streambuf": "c"
+    },
 }
