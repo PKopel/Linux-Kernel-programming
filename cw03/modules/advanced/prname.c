@@ -2,34 +2,9 @@
 
 const char* const prname_text = "Process name for pid %d: %s\n";
 
-struct miscdevice prname_dev;
-
-const struct file_operations prname_fops;
-
 pid_t current_pid;
 
 struct task_struct* current_process;
-
-int prname_init(void)
-{
-        int result = 0;
-
-        result = misc_register(&prname_dev);
-        if (result) {
-                printk(KERN_WARNING "Cannot register /dev/prname device\n");
-                goto err;
-        }
-        return result;
-err:
-        misc_deregister(&prname_dev);
-        return result;
-}
-
-void prname_exit(void)
-{
-        misc_deregister(&prname_dev);
-        printk(KERN_INFO "/dev/prname has been removed\n");
-}
 
 ssize_t prname_read(
     struct file* filp, char __user* user_buf, size_t count, loff_t* f_pos)

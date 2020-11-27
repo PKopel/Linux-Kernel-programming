@@ -15,37 +15,37 @@ static int __init advanced_init(void)
 {
         int result = 0;
 
-        result = prname_init();
+        result = misc_register(&prname_dev);
         if (result) {
-                printk(KERN_WARNING "Cannot init /dev/prname device\n");
+                printk(KERN_WARNING "Cannot register /dev/prname device\n");
                 goto err;
         }
 
-        result = jiffies_init();
+        result = misc_register(&jiffies_dev);
         if (result) {
-                printk(KERN_WARNING "Cannot init /dev/jiffies device\n");
+                printk(KERN_WARNING "Cannot register /dev/circular device\n");
                 goto err;
         }
         /*
-                result = mountderef_init();
-                if (result) {
-                        printk(KERN_WARNING "Cannot init /dev/mountderef
-           device\n"); goto err;
-                }
+
+        result = mountderef_init();
+        if (result) {
+                printk(KERN_WARNING "Cannot initiaize mountderef\n");
+                goto err;
+        }
         */
         return result;
 
 err:
-        prname_exit();
-        jiffies_exit();
-        //        mountderef_exit();
+        misc_deregister(&prname_dev);
+        misc_deregister(&jiffies_dev);
         return result;
 }
 
 static void __exit advanced_exit(void)
 {
-        prname_exit();
-        jiffies_exit();
+        misc_deregister(&prname_dev);
+        misc_deregister(&jiffies_dev);
         //        mountderef_exit();
 
         printk(KERN_INFO "The ADVANCED module has been removed\n");

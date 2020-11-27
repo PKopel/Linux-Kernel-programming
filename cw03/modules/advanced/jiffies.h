@@ -7,8 +7,11 @@
 #include <linux/mm.h>
 #include <linux/uaccess.h>
 
-int jiffies_init(void);
+extern struct miscdevice jiffies_dev;
 
-void jiffies_exit(void);
+extern const struct file_operations jiffies_fops;
+
+ssize_t jiffies_read(
+    struct file* filp, char __user* user_buf, size_t count, loff_t* f_pos);
 
 #endif

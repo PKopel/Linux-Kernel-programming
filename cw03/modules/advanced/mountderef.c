@@ -1,31 +1,52 @@
 #include "mountderef.h"
 
 char* mountderef_buf;
+size_t buf_size = PATH_MAX;
 
-struct miscdevice mountderef_dev;
+int mountderef_init(void)
+{
+        int result = 0;
 
-const struct file_operations mountderef_fops;
+        result = misc_register(&mountderef_dev);
+        if (result) {
+                printk(KERN_WARNING "Cannot register /dev/prname device\n");
+                goto err;
+        }
 
-int mountderef_init(void) { }
+        mountderef_buf = kvmalloc(buf_size, GFP_KERNEL);
+        if (!mountderef_buf) {
+                result = -ENOMEM;
+                goto err;
+        }
 
-void mountderef_exit(void) { }
+        return result;
+err:
+        misc_deregister(&mountderef_dev);
+        kvfree(mountderef_buf);
+        return result;
+}
+
+void mountderef_exit(void)
+{
+        misc_deregister(&mountderef_dev);
+        kvfree(mountderef_buf);
+        printk(KERN_INFO "/dev/mountderef has been removed\n");
+}
 
 ssize_t mountderef_read(
     struct file* filp, char __user* user_buf, size_t count, loff_t* f_pos)
 {
-        size_t to_copy = strlen(mybuf);
-
-        printk(KERN_WARNING "ADVANCED: read f_pos is %lld\n", *f_pos);
+        size_t to_copy = strlen(mountderef_buf);
 
         if (*f_pos >= to_copy) {
                 return 0;
         }
 
-        if (copy_to_user(user_buf, mybuf, to_copy)) {
-                printk(KERN_WARNING "ADVANCED: could not copy data to user\n");
+        if (copy_to_user(user_buf, mountderef_buf, to_copy)) {
+                printk(KERN_WARNING
+                    "ADVANCED-mountderef: could not copy data to user\n");
                 return -EFAULT;
         }
-        read_count++;
 
         *f_pos += to_copy;
         return to_copy;

@@ -2,34 +2,6 @@
 
 const char* const jiffies_text = "Current jiffies number: %zu\n";
 
-char* jiffies_buf;
-
-struct miscdevice jiffies_dev;
-
-const struct file_operations jiffies_fops;
-
-int jiffies_init(void)
-{
-        int result = 0;
-
-        result = misc_register(&jiffies_dev);
-        if (result) {
-                printk(KERN_WARNING "Cannot register /dev/circular device\n");
-                goto err;
-        }
-        return result;
-
-err:
-        misc_deregister(&jiffies_dev);
-        return result;
-}
-
-void jiffies_exit(void)
-{
-        misc_deregister(&jiffies_dev);
-        printk(KERN_INFO "/dev/jiffies has been removed\n");
-}
-
 ssize_t jiffies_read(
     struct file* filp, char __user* user_buf, size_t count, loff_t* f_pos)
 {

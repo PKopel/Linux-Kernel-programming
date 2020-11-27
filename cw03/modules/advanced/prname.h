@@ -7,8 +7,14 @@
 #include <linux/pid.h>
 #include <linux/uaccess.h>
 
-int prname_init(void);
+extern struct miscdevice prname_dev;
 
-void prname_exit(void);
+extern const struct file_operations prname_fops;
+
+ssize_t prname_write(struct file* filp, const char __user* user_buf,
+    size_t count, loff_t* f_pos);
+
+ssize_t prname_read(
+    struct file* filp, char __user* user_buf, size_t count, loff_t* f_pos);
 
 #endif
