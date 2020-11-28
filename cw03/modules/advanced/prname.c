@@ -1,5 +1,7 @@
 #include "advanced.h"
 
+#define DEVICE_NAME "prname"
+
 const char* const prname_text = "Process name for pid %d: %s\n";
 static char comm[TASK_COMM_LEN];
 
@@ -77,7 +79,7 @@ struct miscdevice prname_dev = {
         .minor = MISC_DYNAMIC_MINOR,
         .fops = &prname_fops,
         .mode = 0666,
-        .name = "prname",
+        .name = DEVICE_NAME,
 };
 
 const struct file_operations prname_fops = {

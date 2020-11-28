@@ -7,13 +7,15 @@
 
 MODULE_LICENSE("GPL");
 
+#define DEVICE_NAME "circular"
+
 size_t buf_size = 40;
 
 size_t circular_buf_index;
 char* circular_buf;
 bool circular_buf_filled = false;
 
-struct miscdevice circular_dev;
+static struct miscdevice circular_dev;
 
 struct proc_dir_entry* proc_entry;
 
@@ -165,11 +167,11 @@ ssize_t circular_write_proc(
         return count;
 }
 
-struct miscdevice circular_dev = {
+static struct miscdevice circular_dev = {
         .minor = MISC_DYNAMIC_MINOR,
         .fops = &circular_fops,
         .mode = 0666,
-        .name = "circular",
+        .name = DEVICE_NAME,
 };
 
 const struct file_operations circular_fops = {

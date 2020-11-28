@@ -1,5 +1,7 @@
 #include "advanced.h"
 
+#define DEVICE_NAME "mountderef"
+
 struct path* mount_path;
 
 void mountderef_exit(void)
@@ -109,7 +111,7 @@ struct miscdevice mountderef_dev = {
         .minor = MISC_DYNAMIC_MINOR,
         .fops = &mountderef_fops,
         .mode = 0666,
-        .name = "mountderef",
+        .name = DEVICE_NAME,
 };
 
 const struct file_operations mountderef_fops = {

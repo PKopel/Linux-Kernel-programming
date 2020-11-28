@@ -1,5 +1,7 @@
 #include "advanced.h"
 
+#define DEVICE_NAME "jiffies"
+
 const char* const jiffies_text = "Current jiffies number: %lu\n";
 
 ssize_t jiffies_read(
@@ -41,7 +43,7 @@ struct miscdevice jiffies_dev = {
         .minor = MISC_DYNAMIC_MINOR,
         .fops = &jiffies_fops,
         .mode = 0444,
-        .name = "jiffies",
+        .name = DEVICE_NAME,
 };
 
 const struct file_operations jiffies_fops = {
