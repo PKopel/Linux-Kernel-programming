@@ -1,4 +1,5 @@
 obj-m := advanced.o
+advanced-objs := advanced_init.o prname.o jiffies.o mountderef.o
 
 umKDIR  := ../../../cw02/uml/linux-5.9.6
 KDIR  := /lib/modules/$(shell uname -r)/build

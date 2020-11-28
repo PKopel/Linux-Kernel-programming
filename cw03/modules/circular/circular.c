@@ -45,8 +45,9 @@ static int __init circular_init(void)
                 circular_buf[0] = '\0';
                 circular_buf_index = 0;
                 result = 0;
-                printk(KERN_INFO "The CIRCULAR module has been inserted\n");
         }
+
+        printk(KERN_INFO "The CIRCULAR module has been inserted\n");
         return result;
 
 err:
@@ -73,9 +74,9 @@ static void __exit circular_exit(void)
 ssize_t circular_read(
     struct file* filp, char __user* user_buf, size_t count, loff_t* f_pos)
 {
-        size_t to_copy;
-        to_copy
-            = strlen(circular_buf) > buf_size ? buf_size : strlen(circular_buf);
+        size_t to_copy, string_buf_size;
+        string_buf_size = strlen(circular_buf);
+        to_copy = string_buf_size > buf_size ? buf_size : string_buf_size;
 
         if (*f_pos >= to_copy) {
                 return 0;
@@ -124,7 +125,7 @@ ssize_t circular_write(
 ssize_t circular_write_proc(
     struct file* filp, const char __user* user_buf, size_t count, loff_t* f_pos)
 {
-        int result;
+        ssize_t result;
         size_t new_size;
         char* new_buf;
 
