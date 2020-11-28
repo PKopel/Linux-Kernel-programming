@@ -1,6 +1,7 @@
 #include "advanced.h"
 
 const char* const prname_text = "Process name for pid %d: %s\n";
+static char comm[TASK_COMM_LEN];
 
 pid_t current_pid;
 
@@ -23,8 +24,9 @@ ssize_t prname_read(
                 goto out;
         }
 
-        length = snprintf(
-            buf, 50, prname_text, current_pid, current_process->comm);
+        get_task_comm(comm, current_process);
+
+        length = snprintf(buf, 50, prname_text, current_pid, comm);
 
         if (*f_pos >= length) {
                 goto out;
