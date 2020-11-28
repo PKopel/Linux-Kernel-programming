@@ -4,7 +4,7 @@ struct path* mount_path;
 
 void mountderef_exit(void)
 {
-        if (mount_path && mount_path->mnt)
+        if (mount_path)
                 path_put(mount_path);
         kvfree(mount_path);
         misc_deregister(&mountderef_dev);
@@ -28,6 +28,12 @@ ssize_t mountderef_read(
         }
 
         path_name = d_path(mount_path, buf, count);
+
+        if (IS_ERR(path_name)) {
+                result = PTR_ERR(path_name);
+                goto out;
+        }
+
         length = strlen(path_name);
 
         if (*f_pos >= length || count <= length) {
@@ -53,7 +59,7 @@ ssize_t mountderef_write(
     struct file* filp, const char __user* user_buf, size_t count, loff_t* f_pos)
 {
         ssize_t result = 0;
-        char* new_pathname;
+        struct path* new_mount_path;
         char* buf;
 
         buf = kvmalloc(count + 1, GFP_KERNEL);
@@ -61,41 +67,40 @@ ssize_t mountderef_write(
         if (!buf)
                 return -ENOMEM;
 
-        if (mount_path && mount_path->mnt == NULL) {
-                path_put(mount_path);
-        } else {
-                mount_path = kvmalloc(sizeof(struct path), GFP_KERNEL);
+        new_mount_path = kvmalloc(sizeof(struct path), GFP_KERNEL);
 
-                if (!mount_path) {
-                        result = -ENOMEM;
-                        goto out;
-                }
-
-                mount_path->mnt = NULL;
+        if (!new_mount_path) {
+                result = -ENOMEM;
+                goto out_buf;
         }
 
         if (copy_from_user(buf, user_buf, count)) {
                 result = -EFAULT;
-                goto out;
+                goto out_path;
         }
 
         buf[count] = '\0';
 
-        result = kern_path(buf, LOOKUP_FOLLOW, mount_path);
+        result = kern_path(buf, LOOKUP_FOLLOW, new_mount_path);
         if (result)
-                goto out;
+                goto out_path;
 
-        follow_up(mount_path);
+        follow_up(new_mount_path);
 
-        if (IS_ERR(new_pathname)) {
-                result = PTR_ERR(new_pathname);
-                goto out;
-        }
+        if (mount_path)
+                path_put(mount_path);
+        kvfree(mount_path);
 
+        mount_path = new_mount_path;
         result = count;
         *f_pos = count;
 
-out:
+out_buf:
+        kvfree(buf);
+        return result;
+
+out_path:
+        kvfree(new_mount_path);
         kvfree(buf);
         return result;
 }
