@@ -45,8 +45,9 @@ static int __init circular_init(void)
                 circular_buf[0] = '\0';
                 circular_buf_index = 0;
                 result = 0;
-                printk(KERN_INFO "The CIRCULAR module has been inserted\n");
         }
+
+        printk(KERN_INFO "The CIRCULAR module has been inserted\n");
         return result;
 
 err:

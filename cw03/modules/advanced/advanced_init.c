@@ -1,13 +1,4 @@
-#include "jiffies.h"
-//#include "mountderef.h"
-#include "prname.h"
-#include <linux/fs.h>
-#include <linux/jiffies.h>
-#include <linux/miscdevice.h>
-#include <linux/mm.h>
-#include <linux/module.h>
-#include <linux/proc_fs.h>
-#include <linux/uaccess.h>
+#include "advanced.h"
 
 MODULE_LICENSE("GPL");
 
@@ -26,19 +17,20 @@ static int __init advanced_init(void)
                 printk(KERN_WARNING "Cannot register /dev/circular device\n");
                 goto err;
         }
-        /*
 
-        result = mountderef_init();
+        result = misc_register(&mountderef_dev);
         if (result) {
-                printk(KERN_WARNING "Cannot initiaize mountderef\n");
+                printk(KERN_WARNING "Cannot register /dev/prname device\n");
                 goto err;
         }
-        */
+
+        printk(KERN_INFO "The ADVANCED module has been inserted\n");
         return result;
 
 err:
         misc_deregister(&prname_dev);
         misc_deregister(&jiffies_dev);
+        misc_deregister(&mountderef_dev);
         return result;
 }
 
@@ -46,7 +38,7 @@ static void __exit advanced_exit(void)
 {
         misc_deregister(&prname_dev);
         misc_deregister(&jiffies_dev);
-        //        mountderef_exit();
+        mountderef_exit();
 
         printk(KERN_INFO "The ADVANCED module has been removed\n");
 }

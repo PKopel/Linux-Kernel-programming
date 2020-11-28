@@ -1,78 +1,103 @@
-#include "mountderef.h"
+#include "advanced.h"
 
-char* mountderef_buf;
-size_t buf_size = PATH_MAX;
-
-int mountderef_init(void)
-{
-        int result = 0;
-
-        result = misc_register(&mountderef_dev);
-        if (result) {
-                printk(KERN_WARNING "Cannot register /dev/prname device\n");
-                goto err;
-        }
-
-        mountderef_buf = kvmalloc(buf_size, GFP_KERNEL);
-        if (!mountderef_buf) {
-                result = -ENOMEM;
-                goto err;
-        }
-
-        return result;
-err:
-        misc_deregister(&mountderef_dev);
-        kvfree(mountderef_buf);
-        return result;
-}
+struct path* mount_path;
 
 void mountderef_exit(void)
 {
+        if (mount_path && mount_path->mnt)
+                path_put(mount_path);
+        kvfree(mount_path);
         misc_deregister(&mountderef_dev);
-        kvfree(mountderef_buf);
-        printk(KERN_INFO "/dev/mountderef has been removed\n");
 }
 
 ssize_t mountderef_read(
     struct file* filp, char __user* user_buf, size_t count, loff_t* f_pos)
 {
-        size_t to_copy = strlen(mountderef_buf);
+        char *buf, *path_name;
+        size_t length;
+        ssize_t result = 0;
 
-        if (*f_pos >= to_copy) {
-                return 0;
+        if (!mount_path) {
+                return -ENODATA;
         }
 
-        if (copy_to_user(user_buf, mountderef_buf, to_copy)) {
+        buf = kvmalloc(count, GFP_KERNEL);
+        if (!buf) {
+                result = -ENOMEM;
+                goto out;
+        }
+
+        path_name = d_path(mount_path, buf, count);
+        length = strlen(path_name);
+
+        if (*f_pos >= length || count <= length) {
+                goto out;
+        }
+
+        if (copy_to_user(user_buf, path_name, length)) {
                 printk(KERN_WARNING
-                    "ADVANCED-mountderef: could not copy data to user\n");
-                return -EFAULT;
+                    "ADVANCED-prname: could not copy data to user\n");
+                result = -EFAULT;
+                goto out;
         }
 
-        *f_pos += to_copy;
-        return to_copy;
+        result = count;
+        *f_pos = length;
+
+out:
+        kvfree(buf);
+        return result;
 }
 
 ssize_t mountderef_write(
     struct file* filp, const char __user* user_buf, size_t count, loff_t* f_pos)
 {
-        printk(KERN_WARNING "ADVANCED: write f_pos is %lld\n", *f_pos);
+        ssize_t result = 0;
+        char* new_pathname;
+        char* buf;
 
-        // Cannot write more than buffer size (+ '\0')
-        if (*f_pos >= MYBUF_SIZE - 1) {
-                return -ENOSPC;
+        buf = kvmalloc(count + 1, GFP_KERNEL);
+
+        if (!buf)
+                return -ENOMEM;
+
+        if (mount_path && mount_path->mnt == NULL) {
+                path_put(mount_path);
+        } else {
+                mount_path = kvmalloc(sizeof(struct path), GFP_KERNEL);
+
+                if (!mount_path) {
+                        result = -ENOMEM;
+                        goto out;
+                }
+
+                mount_path->mnt = NULL;
         }
-        if (*f_pos + count > MYBUF_SIZE - 1) {
-                count = MYBUF_SIZE - 1 - *f_pos;
+
+        if (copy_from_user(buf, user_buf, count)) {
+                result = -EFAULT;
+                goto out;
         }
-        if (copy_from_user(mybuf + *f_pos, user_buf, count)) {
-                printk(
-                    KERN_WARNING "ADVANCED: could not copy data from user\n");
-                return -EFAULT;
+
+        buf[count] = '\0';
+
+        result = kern_path(buf, LOOKUP_FOLLOW, mount_path);
+        if (result)
+                goto out;
+
+        follow_up(mount_path);
+
+        if (IS_ERR(new_pathname)) {
+                result = PTR_ERR(new_pathname);
+                goto out;
         }
-        mybuf[count] = '\0';
-        write_count++;
-        *f_pos += count;
-        return count;
+
+        result = count;
+        *f_pos = count;
+
+out:
+        kvfree(buf);
+        return result;
 }
 
 struct miscdevice mountderef_dev = {

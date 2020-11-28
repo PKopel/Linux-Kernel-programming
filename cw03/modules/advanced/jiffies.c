@@ -1,6 +1,6 @@
-#include "jiffies.h"
+#include "advanced.h"
 
-const char* const jiffies_text = "Current jiffies number: %zu\n";
+const char* const jiffies_text = "Current jiffies number: %lu\n";
 
 ssize_t jiffies_read(
     struct file* filp, char __user* user_buf, size_t count, loff_t* f_pos)
@@ -19,7 +19,7 @@ ssize_t jiffies_read(
         length = snprintf(buf, 50, jiffies_text, jiffies);
 
         if (*f_pos >= length) {
-                return result;
+                goto out;
         }
 
         if (copy_to_user(user_buf, buf, length)) {

@@ -1,4 +1,4 @@
-#include "prname.h"
+#include "advanced.h"
 
 const char* const prname_text = "Process name for pid %d: %s\n";
 
@@ -27,7 +27,7 @@ ssize_t prname_read(
             buf, 50, prname_text, current_pid, current_process->comm);
 
         if (*f_pos >= length) {
-                return result;
+                goto out;
         }
 
         if (copy_to_user(user_buf, buf, length)) {
