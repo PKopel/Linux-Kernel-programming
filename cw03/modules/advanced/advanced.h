@@ -1,14 +1,12 @@
 #ifndef ADVANCED_H
 #define ADVANCED_H
 
-#include <linux/fs.h>
 #include <linux/jiffies.h>
 #include <linux/miscdevice.h>
 #include <linux/mm.h>
 #include <linux/module.h>
 #include <linux/namei.h>
 #include <linux/pid.h>
-#include <linux/uaccess.h>
 
 /* mountderef device */
 

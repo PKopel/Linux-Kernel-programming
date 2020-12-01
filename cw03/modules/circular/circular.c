@@ -1,9 +1,8 @@
-#include <linux/fs.h>
 #include <linux/miscdevice.h>
 #include <linux/mm.h>
 #include <linux/module.h>
 #include <linux/proc_fs.h>
-#include <linux/uaccess.h>
+#include <linux/version.h>
 
 MODULE_LICENSE("GPL");
 
@@ -21,7 +20,11 @@ struct proc_dir_entry* proc_entry;
 
 const struct file_operations circular_fops;
 
+#if KERNEL_VERSION(5, 6, 19) <= LINUX_VERSION_CODE
 const struct proc_ops proc_fops;
+#else
+const struct file_operations proc_fops;
+#endif
 
 static int __init circular_init(void)
 {
@@ -39,12 +42,13 @@ static int __init circular_init(void)
                 goto err;
         }
 
-        circular_buf = kvmalloc(buf_size, GFP_KERNEL);
+        circular_buf = kvmalloc(buf_size + 1, GFP_KERNEL);
         if (!circular_buf) {
                 result = -ENOMEM;
                 goto err;
         } else {
                 circular_buf[0] = '\0';
+                circular_buf[buf_size] = '\0';
                 circular_buf_index = 0;
                 result = 0;
         }
@@ -76,21 +80,20 @@ static void __exit circular_exit(void)
 ssize_t circular_read(
     struct file* filp, char __user* user_buf, size_t count, loff_t* f_pos)
 {
-        size_t to_copy, string_buf_size;
-        string_buf_size = strlen(circular_buf);
-        to_copy = string_buf_size > buf_size ? buf_size : string_buf_size;
+        size_t length;
+        length = strlen(circular_buf);
 
-        if (*f_pos >= to_copy) {
+        if (*f_pos >= length) {
                 return 0;
         }
 
-        if (copy_to_user(user_buf, circular_buf, to_copy)) {
+        if (copy_to_user(user_buf, circular_buf, length)) {
                 printk(KERN_WARNING "CIRCULAR: could not copy data to user\n");
                 return -EFAULT;
         }
 
-        *f_pos += to_copy;
-        return to_copy;
+        *f_pos += length;
+        return length;
 }
 
 ssize_t circular_write(
@@ -141,7 +144,7 @@ ssize_t circular_write_proc(
         if (new_size == buf_size)
                 return count;
 
-        new_buf = kvmalloc(new_size, GFP_KERNEL);
+        new_buf = kvmalloc(new_size + 1, GFP_KERNEL);
         if (!new_buf)
                 return -ENOMEM;
 
@@ -152,6 +155,7 @@ ssize_t circular_write_proc(
                 memcpy(new_buf, circular_buf, new_size);
                 circular_buf_filled = false;
         }
+        new_buf[new_size] = '\0';
 
         if (circular_buf_index > new_size) {
                 circular_buf_index = new_size;
@@ -180,9 +184,15 @@ const struct file_operations circular_fops = {
         .write = circular_write,
 };
 
+#if KERNEL_VERSION(5, 6, 19) <= LINUX_VERSION_CODE
 const struct proc_ops proc_fops = {
         .proc_write = circular_write_proc,
 };
+#else
+const struct file_operations proc_fops = {
+        .write = circular_write_proc,
+};
+#endif
 
 module_init(circular_init);
 module_exit(circular_exit);
