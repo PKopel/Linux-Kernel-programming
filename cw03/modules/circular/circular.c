@@ -149,10 +149,9 @@ ssize_t circular_write_proc(
                 return -ENOMEM;
 
         if (new_size > buf_size) {
-                memcpy(new_buf, circular_buf, buf_size);
-                new_buf[buf_size] = '\0';
+                strcpy(new_buf, circular_buf);
         } else {
-                memcpy(new_buf, circular_buf, new_size);
+                strncpy(new_buf, circular_buf, new_size);
                 circular_buf_filled = false;
         }
         new_buf[new_size] = '\0';
