@@ -20,7 +20,7 @@ struct proc_dir_entry* proc_entry;
 
 const struct file_operations circular_fops;
 
-#if KERNEL_VERSION(5, 6, 19) <= LINUX_VERSION_CODE
+#if KERNEL_VERSION(5, 5, 19) <= LINUX_VERSION_CODE
 const struct proc_ops proc_fops;
 #else
 const struct file_operations proc_fops;
@@ -183,7 +183,7 @@ const struct file_operations circular_fops = {
         .write = circular_write,
 };
 
-#if KERNEL_VERSION(5, 6, 19) <= LINUX_VERSION_CODE
+#if KERNEL_VERSION(5, 5, 19) <= LINUX_VERSION_CODE
 const struct proc_ops proc_fops = {
         .proc_write = circular_write_proc,
 };
