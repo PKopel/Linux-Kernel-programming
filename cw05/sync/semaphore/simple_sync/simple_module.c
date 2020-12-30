@@ -47,7 +47,7 @@ ssize_t simple_read(
     struct file* filp, char __user* user_buf, size_t count, loff_t* f_pos)
 {
         char* local_buf;
-        int length_to_copy;
+        int local_msg_pos, length_to_copy;
         int i;
         int err;
 
@@ -58,9 +58,13 @@ ssize_t simple_read(
         if (down_interruptible(&msg_sem))
                 err = -EINTR;
 
+        local_msg_pos = msg_pos;
         length_to_copy = msg_len - (msg_pos % msg_len);
         if (length_to_copy > count)
                 length_to_copy = count;
+        msg_pos += length_to_copy;
+
+        up(&msg_sem);
 
         local_buf = kmalloc(length_to_copy, GFP_KERNEL);
         if (!local_buf) {
@@ -72,9 +76,6 @@ ssize_t simple_read(
                 local_buf[i] = msg_str[(msg_pos++) % msg_len];
                 msleep(100);
         }
-
-        up(&msg_sem);
-
         // 2. Send the text
         err = copy_to_user(user_buf, local_buf, length_to_copy);
         if (err < 0)

@@ -46,7 +46,7 @@ ssize_t simple_read(
     struct file* filp, char __user* user_buf, size_t count, loff_t* f_pos)
 {
         char* local_buf;
-        int length_to_copy;
+        int local_msg_pos, length_to_copy;
         int i;
         int err;
 
@@ -55,11 +55,15 @@ ssize_t simple_read(
         // Calculate the length
         spin_lock_irqsave(&msg_lock, flags);
 
+        local_msg_pos = msg_pos;
         length_to_copy = msg_len - (msg_pos % msg_len);
         if (length_to_copy > count)
                 length_to_copy = count;
+        msg_pos += length_to_copy;
 
-        local_buf = kmalloc(length_to_copy, GFP_NOWAIT);
+        spin_unlock_irqrestore(&msg_lock, flags);
+
+        local_buf = kmalloc(length_to_copy, GFP_KERNEL);
         if (!local_buf) {
                 err = -ENOMEM;
                 goto cleanup;
@@ -69,7 +73,6 @@ ssize_t simple_read(
                 local_buf[i] = msg_str[(msg_pos++) % msg_len];
                 msleep(100);
         }
-        spin_unlock_irqrestore(&msg_lock, flags);
 
         // 2. Send the text
         err = copy_to_user(user_buf, local_buf, length_to_copy);
