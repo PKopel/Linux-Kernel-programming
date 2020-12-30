@@ -38,6 +38,7 @@ struct data {
         struct list_head list;
 };
 
+DEFINE_MUTEX(list_mutex);
 LIST_HEAD(buffer);
 size_t total_length;
 
@@ -74,6 +75,7 @@ static void clean_list(void)
         struct list_head* tmp;
         struct data* data;
 
+        mutex_lock(&list_mutex);
         list_for_each_safe(cur, tmp, &buffer)
         {
                 data = list_entry(cur, struct data, list);
@@ -84,6 +86,8 @@ static void clean_list(void)
                 kfree(data);
         }
         total_length = 0;
+
+        mutex_unlock(&list_mutex);
 }
 
 static void __exit linked_exit(void)
@@ -104,12 +108,16 @@ ssize_t linked_read(
         size_t pos = 0;
         size_t copied = 0;
         size_t real_length = 0;
+        ssize_t result = 0;
 
         printk(
             KERN_WARNING "linked: read, count=%zu f_pos=%lld\n", count, *f_pos);
 
         if (*f_pos > total_length)
                 return 0;
+
+        if (mutex_lock_interruptible(&list_mutex))
+                return -EINTR;
 
         if (list_empty(&buffer))
                 printk(KERN_DEBUG "linked: empty list\n");
@@ -132,7 +140,8 @@ ssize_t linked_read(
                 if (copy_to_user(user_buf + copied, data->contents, to_copy)) {
                         printk(KERN_WARNING
                             "linked: could not copy data to user\n");
-                        return -EFAULT;
+                        result = -EFAULT;
+                        goto err;
                 }
                 copied += to_copy;
                 pos += to_copy;
@@ -145,6 +154,9 @@ ssize_t linked_read(
             real_length);
         *f_pos += real_length;
         read_count++;
+
+err:
+        mutex_unlock(&list_mutex);
         return copied;
 }
 
@@ -153,7 +165,8 @@ ssize_t linked_write(
 {
         struct data* data;
         ssize_t result = 0;
-        size_t i = 0;
+        size_t i = 0, copied_length = 0;
+        LIST_HEAD(tmp);
 
         printk(KERN_WARNING "linked: write, count=%zu f_pos=%lld\n", count,
             *f_pos);
@@ -172,16 +185,28 @@ ssize_t linked_write(
                         result = -EFAULT;
                         goto err_contents;
                 }
+
                 if (strncmp(data->contents, "xxx&", 4) == 0) {
                         clean_list();
                         result = count;
                         goto err_contents;
                 }
-                list_add_tail(&(data->list), &buffer);
-                total_length += to_copy;
+                list_add_tail(&(data->list), &tmp);
+                copied_length += to_copy;
+
                 *f_pos += to_copy;
                 mdelay(10);
         }
+
+        if (mutex_lock_interruptible(&list_mutex)) {
+                result = -EINTR;
+                goto err_contents;
+        }
+
+        list_add_tail(tmp.next, &buffer);
+        total_length += copied_length;
+
+        mutex_unlock(&list_mutex);
 
         write_count++;
         return count;

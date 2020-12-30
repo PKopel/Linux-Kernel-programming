@@ -18,7 +18,7 @@ const char msg_str[] = "-0123456789-ABCDEFGHIJ-";
 const int msg_len = sizeof(msg_str);
 int msg_pos;
 
-static DEFINE_SPINLOCK(msg_lock);
+DEFINE_SPINLOCK(msg_lock);
 ulong flags;
 
 static int __init simple_init(void)

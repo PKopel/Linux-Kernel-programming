@@ -18,8 +18,8 @@ MODULE_LICENSE("GPL");
 
 const char* const proc_info = "reads: %zu\nwrites: %zu\ntotal length: %zu\n";
 
-size_t read_count;
-size_t write_count;
+atomic_t read_count;
+atomic_t write_count;
 struct proc_dir_entry* proc_entry;
 
 /* Operations for /dev/linked */
@@ -39,7 +39,7 @@ struct data {
 };
 
 LIST_HEAD(buffer);
-size_t total_length;
+atomic_t total_length;
 
 static int __init linked_init(void)
 {
@@ -80,10 +80,11 @@ static void clean_list(void)
                 printk(KERN_DEBUG "linked: clearing <%*pE>\n", INTERNAL_SIZE,
                     data->contents);
 
-                list_del(&(data->list));
+                list_del_rcu(&(data->list));
+                synchronize_rcu();
                 kfree(data);
         }
-        total_length = 0;
+        atomic_set(&total_length, 0);
 }
 
 static void __exit linked_exit(void)
@@ -104,17 +105,19 @@ ssize_t linked_read(
         size_t pos = 0;
         size_t copied = 0;
         size_t real_length = 0;
+        ssize_t result = 0;
 
         printk(
             KERN_WARNING "linked: read, count=%zu f_pos=%lld\n", count, *f_pos);
 
-        if (*f_pos > total_length)
+        if (*f_pos > atomic_read(&total_length))
                 return 0;
 
         if (list_empty(&buffer))
                 printk(KERN_DEBUG "linked: empty list\n");
 
-        list_for_each_entry(data, &buffer, list)
+        rcu_read_lock();
+        list_for_each_entry_rcu(data, &buffer, list)
         {
                 size_t to_copy = min(data->length, count - copied);
 
@@ -132,7 +135,8 @@ ssize_t linked_read(
                 if (copy_to_user(user_buf + copied, data->contents, to_copy)) {
                         printk(KERN_WARNING
                             "linked: could not copy data to user\n");
-                        return -EFAULT;
+                        result = -EFAULT;
+                        goto err;
                 }
                 copied += to_copy;
                 pos += to_copy;
@@ -141,10 +145,14 @@ ssize_t linked_read(
                 if (copied >= count)
                         break;
         }
+
         printk(KERN_WARNING "linked: copied=%zd real_length=%zd\n", copied,
             real_length);
         *f_pos += real_length;
-        read_count++;
+        atomic_add(&read_count, 1);
+
+err:
+        rcu_read_unlock();
         return copied;
 }
 
@@ -153,7 +161,8 @@ ssize_t linked_write(
 {
         struct data* data;
         ssize_t result = 0;
-        size_t i = 0;
+        size_t i = 0, copied_length = 0;
+        LIST_HEAD(tmp);
 
         printk(KERN_WARNING "linked: write, count=%zu f_pos=%lld\n", count,
             *f_pos);
@@ -172,18 +181,22 @@ ssize_t linked_write(
                         result = -EFAULT;
                         goto err_contents;
                 }
+
                 if (strncmp(data->contents, "xxx&", 4) == 0) {
                         clean_list();
                         result = count;
                         goto err_contents;
                 }
-                list_add_tail(&(data->list), &buffer);
-                total_length += to_copy;
+                list_add_tail(&(data->list), &tmp);
+                copied_length += to_copy;
+
                 *f_pos += to_copy;
                 mdelay(10);
         }
 
-        write_count++;
+        list_add_tail_rcu(tmp.next, &buffer);
+        atomic_add(&total_length, copied_length);
+        atomic_add(&write_count, 1);
         return count;
 
 err_contents:
