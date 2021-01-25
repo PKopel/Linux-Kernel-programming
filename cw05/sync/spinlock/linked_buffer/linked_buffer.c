@@ -116,10 +116,10 @@ ssize_t linked_read(
         printk(
             KERN_WARNING "linked: read, count=%zu f_pos=%lld\n", count, *f_pos);
 
-        if (*f_pos > total_length)
-                return 0;
-
         spin_lock(&list_lock);
+
+        if (*f_pos > total_length)
+                goto err;
 
         if (list_empty(&buffer))
                 printk(KERN_DEBUG "linked: empty list\n");
@@ -156,10 +156,11 @@ ssize_t linked_read(
             real_length);
         *f_pos += real_length;
         read_count++;
+        result = copied;
 
 err:
         spin_unlock(&list_lock);
-        return copied;
+        return result;
 }
 
 ssize_t linked_write(
@@ -168,7 +169,8 @@ ssize_t linked_write(
         struct data* data;
         ssize_t result = 0;
         size_t i = 0, copied_length = 0;
-        LIST_HEAD(tmp);
+        struct list_head tmp, *pos, *n;
+        INIT_LIST_HEAD(&tmp);
 
         printk(KERN_WARNING "linked: write, count=%zu f_pos=%lld\n", count,
             *f_pos);
@@ -202,7 +204,7 @@ ssize_t linked_write(
 
         spin_lock(&list_lock);
 
-        list_add_tail(tmp.next, &buffer);
+        list_splice_tail(&tmp, &buffer);
         total_length += copied_length;
 
         spin_unlock(&list_lock);
@@ -211,7 +213,12 @@ ssize_t linked_write(
         return count;
 
 err_contents:
-        kfree(data);
+        list_for_each_safe(pos, n, &tmp)
+        {
+                data = list_entry(pos, struct data, list);
+                list_del(&(data->list));
+                kfree(data);
+        }
 err_data:
         return result;
 }
@@ -234,10 +241,10 @@ const struct file_operations linked_fops = {
 
 #if KERNEL_VERSION(5, 5, 19) <= LINUX_VERSION_CODE
 const struct proc_ops proc_fops = {
-        .open = linked_proc_open,
-        .read = seq_read,
-        .llseek = seq_lseek,
-        .release = single_release,
+        .proc_open = linked_proc_open,
+        .proc_read = seq_read,
+        .proc_lseek = seq_lseek,
+        .proc_release = single_release,
 };
 #else
 const struct file_operations proc_fops = {

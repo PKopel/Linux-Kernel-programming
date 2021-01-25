@@ -16,7 +16,7 @@ MODULE_LICENSE("GPL");
 #define LINKED_MAJOR 199
 #define INTERNAL_SIZE 4
 
-const char* const proc_info = "reads: %zu\nwrites: %zu\ntotal length: %zu\n";
+const char* const proc_info = "reads: %d\nwrites: %d\ntotal length: %d\n";
 
 atomic_t read_count;
 atomic_t write_count;
@@ -38,6 +38,7 @@ struct data {
         struct list_head list;
 };
 
+DEFINE_MUTEX(list_mutex);
 LIST_HEAD(buffer);
 atomic_t total_length;
 
@@ -149,11 +150,12 @@ ssize_t linked_read(
         printk(KERN_WARNING "linked: copied=%zd real_length=%zd\n", copied,
             real_length);
         *f_pos += real_length;
-        atomic_add(&read_count, 1);
+        atomic_add(1, &read_count);
+        result = copied;
 
 err:
         rcu_read_unlock();
-        return copied;
+        return result;
 }
 
 ssize_t linked_write(
@@ -162,7 +164,8 @@ ssize_t linked_write(
         struct data* data;
         ssize_t result = 0;
         size_t i = 0, copied_length = 0;
-        LIST_HEAD(tmp);
+        struct list_head tmp, *pos, *n;
+        INIT_LIST_HEAD(&tmp);
 
         printk(KERN_WARNING "linked: write, count=%zu f_pos=%lld\n", count,
             *f_pos);
@@ -194,20 +197,32 @@ ssize_t linked_write(
                 mdelay(10);
         }
 
-        list_add_tail_rcu(tmp.next, &buffer);
-        atomic_add(&total_length, copied_length);
-        atomic_add(&write_count, 1);
+        if (mutex_lock_interruptible(&list_mutex)) {
+                result = -EINTR;
+                goto err_contents;
+        }
+
+        list_splice_tail_init_rcu(&tmp, &buffer, synchronize_rcu);
+        atomic_add(copied_length, &total_length);
+        atomic_add(1, &write_count);
+        mutex_unlock(&list_mutex);
         return count;
 
 err_contents:
-        kfree(data);
+        list_for_each_safe(pos, n, &tmp)
+        {
+                data = list_entry(pos, struct data, list);
+                list_del(&(data->list));
+                kfree(data);
+        }
 err_data:
         return result;
 }
 
 int linked_proc_show(struct seq_file* m, void* v)
 {
-        seq_printf(m, proc_info, read_count, write_count, total_length);
+        seq_printf(m, proc_info, atomic_read(&read_count),
+            atomic_read(&write_count), atomic_read(&total_length));
         return 0;
 }
 
@@ -223,10 +238,10 @@ const struct file_operations linked_fops = {
 
 #if KERNEL_VERSION(5, 5, 19) <= LINUX_VERSION_CODE
 const struct proc_ops proc_fops = {
-        .open = linked_proc_open,
-        .read = seq_read,
-        .llseek = seq_lseek,
-        .release = single_release,
+        .proc_open = linked_proc_open,
+        .proc_read = seq_read,
+        .proc_lseek = seq_lseek,
+        .proc_release = single_release,
 };
 #else
 const struct file_operations proc_fops = {

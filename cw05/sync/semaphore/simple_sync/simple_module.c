@@ -73,7 +73,7 @@ ssize_t simple_read(
         }
 
         for (i = 0; i < length_to_copy; i++) {
-                local_buf[i] = msg_str[(msg_pos++) % msg_len];
+                local_buf[i] = msg_str[(local_msg_pos++) % msg_len];
                 msleep(100);
         }
         // 2. Send the text
