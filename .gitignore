@@ -6,10 +6,15 @@
 *.cmd
 *.symvers
 *.order
+*.mod
+*.mod.c
 KopelPawel/*
 KopelPawel*
 kol*
 cw02/*
 cw04/*
+cw05/sync/linked_buffer/*
+cw05/sync/simple_sync/*
+
 .vscode
 *.tar.gz

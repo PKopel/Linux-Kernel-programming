@@ -9,6 +9,7 @@
 #include <linux/list.h>
 #include <linux/seq_file.h>
 #include <linux/delay.h>
+#include <linux/version.h>
 
 MODULE_LICENSE("GPL");
 
@@ -25,12 +26,16 @@ struct proc_dir_entry *proc_entry;
 const struct file_operations linked_fops;
 
 /* Operations for /proc/linked */
+#if KERNEL_VERSION(5, 5, 19) <= LINUX_VERSION_CODE
+const struct proc_ops proc_fops;
+#else
 const struct file_operations proc_fops;
+#endif
 
 struct data {
-	size_t length;
-	char contents[INTERNAL_SIZE];
-	struct list_head list;
+        size_t length;
+        char contents[INTERNAL_SIZE];
+        struct list_head list;
 };
 
 LIST_HEAD(buffer);
@@ -201,12 +206,21 @@ const struct file_operations linked_fops = {
 	.write = linked_write,
 };
 
-const struct file_operations proc_fops = {
-	.open		= linked_proc_open,
-	.read		= seq_read,
-	.llseek		= seq_lseek,
-	.release	= single_release,
+#if KERNEL_VERSION(5, 5, 19) <= LINUX_VERSION_CODE
+const struct proc_ops proc_fops = {
+        .proc_open = linked_proc_open,
+        .proc_read = seq_read,
+        .proc_lseek = seq_lseek,
+        .proc_release = single_release,
 };
+#else
+const struct file_operations proc_fops = {
+        .open = linked_proc_open,
+        .read = seq_read,
+        .llseek = seq_lseek,
+        .release = single_release,
+};
+#endif
 
 module_init(linked_init);
 module_exit(linked_exit);
