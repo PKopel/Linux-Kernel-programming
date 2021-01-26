@@ -41,7 +41,7 @@ kuid_t max_time_kuid(struct hlist_head* hlist)
 
 SYSCALL_DEFINE1(timeuser, uid_t __user*, uid_result)
 {
-        struct task_struct* task;
+        struct task_struct* process;
         u64 task_time;
         kuid_t top_kuid;
         struct hlist_head hlist;
@@ -49,10 +49,10 @@ SYSCALL_DEFINE1(timeuser, uid_t __user*, uid_result)
         INIT_HLIST_HEAD(&hlist);
 
         rcu_read_lock();
-        for_each_process(task)
+        for_each_process(process)
         {
-                top_kuid = task_uid(task);
-                task_time = task->utime + task->stime;
+                top_kuid = task_uid(process);
+                task_time = process->utime + process->stime;
                 update_time(top_kuid, task_time, &hlist);
         }
         rcu_read_unlock();

@@ -7,16 +7,16 @@
 
 SYSCALL_DEFINE1(topuser, uid_t __user*, uid_result)
 {
-        struct task_struct* task;
+        struct task_struct* process;
         kuid_t top_kuid, current_kuid;
         uint top_count = 0, current_count;
         struct user_struct* current_user;
         long result = 0;
 
         rcu_read_lock();
-        for_each_process(task)
+        for_each_process(process)
         {
-                current_kuid = task_uid(task);
+                current_kuid = task_uid(process);
                 current_user = find_user(current_kuid);
                 if (current_user) {
                         current_count = atomic_read(&(current_user->processes));
