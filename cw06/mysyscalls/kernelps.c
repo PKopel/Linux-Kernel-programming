@@ -19,8 +19,7 @@ SYSCALL_DEFINE2(kernelps, __user size_t*, u_length, __user char**, u_comm_table)
 
         struct task_struct* process;
         size_t length = 0, curr = 0;
-        char** comm_table;
-        char __user* comm;
+        char(*comm_table)[TASK_COMM_LEN];
         long result = 0;
 
         if (u_comm_table == NULL)
@@ -44,13 +43,11 @@ SYSCALL_DEFINE2(kernelps, __user size_t*, u_length, __user char**, u_comm_table)
         }
         rcu_read_unlock();
 
-        for (int i = 0; i < length; i++) {
-                if (copy_from_user(&comm, &u_comm_table[i], sizeof(char*))) {
+        for (curr = 0; curr < length; curr++) {
+                if (copy_to_user(
+                        u_comm_table[curr], comm_table[curr], TASK_COMM_LEN)) {
                         result = -EFAULT;
-                        goto out;
-                }
-                if (copy_to_user(comm, comm_table[i], TASK_COMM_LEN)) {
-                        result = -EFAULT;
+                        printk(KERN_ERR "copy to user err\n");
                         goto out;
                 }
         }

@@ -26,5 +26,5 @@ SYSCALL_DEFINE2(pidtoname, pid_t, pid, char __user*, namebuf)
 
 out:
         free_pid(pid_struct);
-        return 0;
+        return result;
 }
